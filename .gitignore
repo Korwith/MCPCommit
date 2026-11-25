@@ -1,0 +1,5 @@
+# MCP packs, Mojang jars and decompiled workspaces
+data/
+__pycache__/
+*.pyc
+build/

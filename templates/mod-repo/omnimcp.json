@@ -1,0 +1,10 @@
+{
+  "name": "MyMod",
+  "version": "1.0",
+  "minecraft": "b1.7.3",
+  "sources": {"client": "src/client"},
+  "resources": {"client": "resources/client"},
+  "java": 8,
+  "patched_jar": false,
+  "sources_zip": true
+}

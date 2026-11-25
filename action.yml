@@ -1,0 +1,118 @@
+name: OmniMCP build
+description: >-
+  Build a Minecraft Coder Pack jar mod (alpha 1.1.2 - 1.12) from an omnimcp.json config:
+  fetch the MCP release and the vanilla jars, decompile, apply the mod's sources and patches,
+  recompile, reobfuscate, and upload the finished mod jar as a workflow artifact.
+author: OmniMCP
+
+inputs:
+  config:
+    description: Path to the mod config, relative to the repository root
+    default: omnimcp.json
+  artifact-name:
+    description: Name of the uploaded artifact (default <name>-<version>-mc<minecraft>)
+    default: ''
+  upload:
+    description: Upload the built files as a workflow artifact
+    default: 'true'
+  retention-days:
+    description: Days to keep the artifact (0 = repository default)
+    default: '0'
+  python-version:
+    description: Python used to run MCP's tooling
+    default: '3.12'
+
+outputs:
+  out-dir:
+    description: Folder holding the built jars
+    value: ${{ steps.build.outputs.out_dir }}
+  artifact-name:
+    description: Name of the uploaded artifact
+    value: ${{ steps.name.outputs.name }}
+  pack:
+    description: MCP pack the mod was built with (e.g. 1.12__mcp940)
+    value: ${{ steps.prepare.outputs.pack }}
+  version:
+    description: Mod version (from the config, or read from a source file)
+    value: ${{ steps.prepare.outputs.version }}
+  mod-file:
+    description: Path of the built mod jar/zip (first side)
+    value: ${{ steps.build.outputs.mod_file }}
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - id: prepare
+      name: Pick MCP release
+      shell: bash
+      env:
+        MCPWB_DATA: ${{ runner.temp }}/omnimcp
+        OMNIMCP_CONFIG: ${{ inputs.config }}
+      run: python "$GITHUB_ACTION_PATH/backend/build_mod.py" prepare --config "$OMNIMCP_CONFIG"
+
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: ${{ steps.prepare.outputs.java }}
+
+    - id: cache
+      name: Restore decompiled workspace
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.temp }}/omnimcp
+        key: ${{ steps.prepare.outputs.cache_key }}
+
+    # JAD and astyle.exe are Windows programs; only decompiling needs them, so skip on a cache hit
+    - name: Install wine
+      if: steps.prepare.outputs.wine == 'true' && steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        sudo dpkg --add-architecture i386
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq --no-install-recommends wine wine64 wine32:i386 > /dev/null
+        WINEDLLOVERRIDES="mscoree,mshtml=" WINEDEBUG=-all wineboot -i || true
+        wine --version
+
+    - name: Decompile
+      shell: bash
+      env:
+        MCPWB_DATA: ${{ runner.temp }}/omnimcp
+        OMNIMCP_CONFIG: ${{ inputs.config }}
+        WINEDLLOVERRIDES: mscoree,mshtml=
+      run: python "$GITHUB_ACTION_PATH/backend/build_mod.py" decompile --config "$OMNIMCP_CONFIG"
+
+    - name: Save decompiled workspace
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/omnimcp
+        key: ${{ steps.prepare.outputs.cache_key }}
+
+    - id: build
+      name: Recompile, reobfuscate, package
+      shell: bash
+      env:
+        MCPWB_DATA: ${{ runner.temp }}/omnimcp
+        OMNIMCP_CONFIG: ${{ inputs.config }}
+        OMNIMCP_OUT: ${{ runner.temp }}/omnimcp-out
+        WINEDLLOVERRIDES: mscoree,mshtml=
+      run: python "$GITHUB_ACTION_PATH/backend/build_mod.py" build --config "$OMNIMCP_CONFIG" --out "$OMNIMCP_OUT"
+
+    - id: name
+      shell: bash
+      env:
+        WANTED: ${{ inputs.artifact-name }}
+        DEFAULT: ${{ steps.prepare.outputs.artifact }}
+      run: echo "name=${WANTED:-$DEFAULT}" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/upload-artifact@v4
+      if: inputs.upload == 'true'
+      with:
+        name: ${{ steps.name.outputs.name }}
+        path: ${{ steps.build.outputs.out_dir }}
+        if-no-files-found: error
+        retention-days: ${{ inputs.retention-days }}
