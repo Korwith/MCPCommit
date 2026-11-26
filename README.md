@@ -5,7 +5,7 @@ Utilizes a configuration file to figure out what to do\
 Reads `omnimcp.json` from the GitHub Repo\
 Downloads the matching MCP release (from archive.org) and vanilla jars\
 Decompiles the vanilla jar, applies patches, recompiles, reobfuscates\
-Uploads the finished mod file as an artifact (found in actions)\
+Uploads the finished mod jar directly as an artifact, not zipped (found in actions)\
 
 
 ```yaml

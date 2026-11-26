@@ -548,6 +548,7 @@ def package(cfg, meta, pack, out_dir):
                 res = _add_resources(zf, cfg, side, seen)
             log('%s: %d classes, %d resources -> %s' % (side, len(st['classes']), res, os.path.basename(jar)))
             produced.append(jar)
+            set_output(**{side + '_jar': jar})
             if side == cfg.sides[0]:
                 set_output(mod_file=jar)
 
@@ -569,11 +570,13 @@ def package(cfg, meta, pack, out_dir):
                             zf.writestr(info, vz.read(info))
                 log('%s: full game jar with the mod installed -> %s' % (side, os.path.basename(full)))
                 produced.append(full)
+                set_output(**{side + '_patched_jar': full})
 
         if cfg.sources_zip:
             src = os.path.join(out_dir, '%s-%s-mc%s-sources.zip' % (cfg.name, cfg.version, cfg.minecraft))
             mods.build_zip(meta, 'src', None if len(cfg.sides) > 1 else SIDE_DIR[cfg.sides[0]], src)
             produced.append(src)
+            set_output(sources_zip=src)
         lines = ['%s %s for Minecraft %s (MCP %s, %s)' % (cfg.name, cfg.version, meta['client_version'],
                                                          meta['mcp_version'], meta['pack']),
                  'Built %s by OmniMCP' % time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime()), '',

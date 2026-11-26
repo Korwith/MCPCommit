@@ -10,10 +10,10 @@ inputs:
     description: Path to the mod config, relative to the repository root
     default: omnimcp.json
   artifact-name:
-    description: Name of the uploaded artifact (default <name>-<version>-mc<minecraft>)
+    description: Deprecated and ignored; each file is uploaded unzipped as its own artifact, named after the file
     default: ''
   upload:
-    description: Upload the built files as a workflow artifact
+    description: Upload each built file (mod jars, sources zip) as its own unzipped workflow artifact
     default: 'true'
   retention-days:
     description: Days to keep the artifact (0 = repository default)
@@ -109,10 +109,48 @@ runs:
         DEFAULT: ${{ steps.prepare.outputs.artifact }}
       run: echo "name=${WANTED:-$DEFAULT}" >> "$GITHUB_OUTPUT"
 
-    - uses: actions/upload-artifact@v4
-      if: inputs.upload == 'true'
+    # archive: false uploads each file as-is (a .jar, not a zip of it); the artifact takes the file's name
+    - name: Upload client jar
+      if: inputs.upload == 'true' && steps.build.outputs.client_jar != ''
+      uses: actions/upload-artifact@v7
       with:
-        name: ${{ steps.name.outputs.name }}
-        path: ${{ steps.build.outputs.out_dir }}
+        path: ${{ steps.build.outputs.client_jar }}
+        archive: false
+        if-no-files-found: error
+        retention-days: ${{ inputs.retention-days }}
+
+    - name: Upload server jar
+      if: inputs.upload == 'true' && steps.build.outputs.server_jar != ''
+      uses: actions/upload-artifact@v7
+      with:
+        path: ${{ steps.build.outputs.server_jar }}
+        archive: false
+        if-no-files-found: error
+        retention-days: ${{ inputs.retention-days }}
+
+    - name: Upload patched client jar
+      if: inputs.upload == 'true' && steps.build.outputs.client_patched_jar != ''
+      uses: actions/upload-artifact@v7
+      with:
+        path: ${{ steps.build.outputs.client_patched_jar }}
+        archive: false
+        if-no-files-found: error
+        retention-days: ${{ inputs.retention-days }}
+
+    - name: Upload patched server jar
+      if: inputs.upload == 'true' && steps.build.outputs.server_patched_jar != ''
+      uses: actions/upload-artifact@v7
+      with:
+        path: ${{ steps.build.outputs.server_patched_jar }}
+        archive: false
+        if-no-files-found: error
+        retention-days: ${{ inputs.retention-days }}
+
+    - name: Upload sources zip
+      if: inputs.upload == 'true' && steps.build.outputs.sources_zip != ''
+      uses: actions/upload-artifact@v7
+      with:
+        path: ${{ steps.build.outputs.sources_zip }}
+        archive: false
         if-no-files-found: error
         retention-days: ${{ inputs.retention-days }}
